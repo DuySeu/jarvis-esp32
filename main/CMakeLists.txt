@@ -43,6 +43,8 @@ set(SOURCES "audio/audio_codec.cc"
 list(APPEND SOURCES
     "tuya/tuya_auth.cc"
     "tuya/tuya_client.cc"
+    "tuya/tuya_device_manager.cc"
+    "tuya/tuya_tools.cc"
 )
 
 set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols" "tuya")

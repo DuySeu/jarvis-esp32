@@ -9,6 +9,9 @@
 #include "mcp_server.h"
 #include "assets.h"
 #include "settings.h"
+#include "tuya/tuya_sntp.h"
+#include "tuya/tuya_device_manager.h"
+#include "tuya/tuya_tools.h"
 
 #include <cstring>
 #include <esp_log.h>
@@ -313,6 +316,17 @@ void Application::HandleActivationDoneEvent() {
     ota_.reset();
     auto& board = Board::GetInstance();
     board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
+
+    // Initialize Tuya Network logic (SNTP sync + Device Fetch + Tool Registration)
+    // Run inside Schedule to ensure it happens on the main application task
+    Schedule([]() {
+        if (TuyaSntp::Sync()) {
+            auto err = TuyaDeviceManager::GetInstance().FetchAndCache();
+            if (err == ESP_OK) {
+                RegisterSmartLifeTools();
+            }
+        }
+    });
 
     Schedule([this]() {
         // Play the success sound to indicate the device is ready
