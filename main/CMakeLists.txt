@@ -39,7 +39,13 @@ set(SOURCES "audio/audio_codec.cc"
             "main.cc"
             )
 
-set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols")
+# Tuya SmartLife MCP integration
+list(APPEND SOURCES
+    "tuya/tuya_auth.cc"
+    "tuya/tuya_client.cc"
+)
+
+set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols" "tuya")
 
 # Add board common files
 list(APPEND SOURCES
