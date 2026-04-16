@@ -48,6 +48,17 @@ public:
     // Exposes the raw device list (for future iteration in Phase 3).
     const std::vector<TuyaDevice>& GetDevices() const { return devices_; }
 
+    // Returns the Tuya category code (e.g. "dj" for bulb, "kg" for switch) for a given device_id.
+    std::string FindDeviceCategory(const std::string& device_id) const;
+
+    // Sends a turn on/off command to the specified device.
+    // Uses 'switch_led' for category 'dj' (lights) and 'switch_1' otherwise.
+    esp_err_t SendCommand(const std::string& device_id, bool on);
+
+    // Sends a scheduled timer command to the specified device.
+    // 'time_hhmm' must be in "HH:mm" format.
+    esp_err_t SetSchedule(const std::string& device_id, bool on, const std::string& time_hhmm);
+
 private:
     TuyaDeviceManager() = default;
     ~TuyaDeviceManager() = default;

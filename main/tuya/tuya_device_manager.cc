@@ -2,6 +2,7 @@
 #include "tuya_auth.h"
 #include "tuya_client.h"
 #include "tuya_config.h"
+#include "settings.h"
 #include "esp_log.h"
 #include "cJSON.h"
 #include <algorithm>
@@ -133,4 +134,112 @@ std::string TuyaDeviceManager::ListDevicesJson() const {
     }
     json += "]";
     return json;
+}
+
+std::string TuyaDeviceManager::FindDeviceCategory(const std::string& device_id) const {
+    for (const auto& dev : devices_) {
+        if (dev.id == device_id) {
+            return dev.category;
+        }
+    }
+    return "";
+}
+
+esp_err_t TuyaDeviceManager::SendCommand(const std::string& device_id, bool on) {
+    std::string token = TuyaAuth::GetInstance().GetValidToken();
+    if (token.empty()) {
+        ESP_LOGE(TAG, "No valid token for SendCommand");
+        return ESP_FAIL;
+    }
+
+    std::string category = FindDeviceCategory(device_id);
+    std::string code = (category == "dj") ? "switch_led" : "switch_1";
+
+    std::string path = "/v1.0/devices/" + device_id + "/commands";
+    std::string payload = "{\"commands\":[{\"code\":\"" + code + "\",\"value\":" + (on ? "true" : "false") + "}]}";
+
+    TuyaClient client;
+    std::string response;
+    esp_err_t err = client.Post(path, token, payload, response);
+    
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "SendCommand Post failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    // Parse JSON to check Tuya success flag
+    cJSON* root = cJSON_Parse(response.c_str());
+    if (!root) {
+        ESP_LOGE(TAG, "SendCommand invalid JSON");
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+
+    cJSON* success = cJSON_GetObjectItem(root, "success");
+    if (!cJSON_IsTrue(success)) {
+        cJSON* code_j = cJSON_GetObjectItem(root, "code");
+        cJSON* msg_j  = cJSON_GetObjectItem(root, "msg");
+        ESP_LOGE(TAG, "Tuya Command Error: %d - %s", 
+                 (code_j && cJSON_IsNumber(code_j)) ? code_j->valueint : 0,
+                 (msg_j && cJSON_IsString(msg_j)) ? msg_j->valuestring : "unknown");
+        cJSON_Delete(root);
+        return ESP_FAIL;
+    }
+
+    cJSON_Delete(root);
+    return ESP_OK;
+}
+
+esp_err_t TuyaDeviceManager::SetSchedule(const std::string& device_id, bool on, const std::string& time_hhmm) {
+    std::string token = TuyaAuth::GetInstance().GetValidToken();
+    if (token.empty()) {
+        ESP_LOGE(TAG, "No valid token for SetSchedule");
+        return ESP_FAIL;
+    }
+
+    std::string category = FindDeviceCategory(device_id);
+    std::string code = (category == "dj") ? "switch_led" : "switch_1";
+
+    std::string path = "/v2.0/cloud/timer/device/" + device_id;
+    
+    // Read optional timezone from NVS settings, default to UTC if missing.
+    Settings settings("tuya", true);
+    std::string timezone = settings.GetString("timezone", "UTC");
+
+    // Compose payload
+    std::string payload = "{"
+        "\"alias_name\":\"Jarvis Timer\","
+        "\"time\":\"" + time_hhmm + "\","
+        "\"timezone_id\":\"" + timezone + "\","
+        "\"functions\":[{\"code\":\"" + code + "\",\"value\":" + (on ? "true" : "false") + "}]"
+    "}";
+
+    TuyaClient client;
+    std::string response;
+    esp_err_t err = client.Post(path, token, payload, response);
+    
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "SetSchedule Post failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    // Parse JSON
+    cJSON* root = cJSON_Parse(response.c_str());
+    if (!root) {
+        ESP_LOGE(TAG, "SetSchedule invalid JSON");
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+
+    cJSON* success = cJSON_GetObjectItem(root, "success");
+    if (!cJSON_IsTrue(success)) {
+        cJSON* code_j = cJSON_GetObjectItem(root, "code");
+        cJSON* msg_j  = cJSON_GetObjectItem(root, "msg");
+        ESP_LOGE(TAG, "Tuya Timer Error: %d - %s", 
+                 (code_j && cJSON_IsNumber(code_j)) ? code_j->valueint : 0,
+                 (msg_j && cJSON_IsString(msg_j)) ? msg_j->valuestring : "unknown");
+        cJSON_Delete(root);
+        return ESP_FAIL;
+    }
+
+    cJSON_Delete(root);
+    return ESP_OK;
 }

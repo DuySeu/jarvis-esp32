@@ -37,34 +37,52 @@ void RegisterSmartLifeTools() {
                     Property("on", kPropertyTypeBoolean)
                 }),
                 [](const PropertyList& properties) -> ReturnValue {
-                    // MCP-03: Error fallback if not found
                     std::string device_name = properties["device_name"].value<std::string>();
+                    bool on = properties["on"].value<bool>();
+                    
                     std::string device_id = TuyaDeviceManager::GetInstance().FindDeviceId(device_name);
                     if (device_id.empty()) {
                         throw std::runtime_error("Device not found: " + device_name);
                     }
-                    // Stub for device control phase
-                    throw std::runtime_error("turn_on_light not yet implemented (coming in Phase 3)");
-                    return false;
+
+                    esp_err_t err = TuyaDeviceManager::GetInstance().SendCommand(device_id, on);
+                    if (err != ESP_OK) {
+                        throw std::runtime_error("Failed to execute command on Tuya Cloud.");
+                    }
+
+                    return std::string("Successfully turned ") + (on ? "on " : "off ") + device_name;
                 });
 
-    // 3. set_schedule tool (Stub for Phase 3)
+    // 3. set_schedule tool
     mcp.AddTool("smartlife.set_schedule",
-                "Schedules a specific device to turn on or off at a target time. "
-                "Time formats supported: 'in X minutes', 'at 11pm', 'in 2 hours', etc.",
+                "Schedules a one-time action for a device to turn on or off at a target time. "
+                "Always check smartlife.list_devices first to get the exact device name. ",
                 PropertyList({
                     Property("device_name", kPropertyTypeString),
-                    Property("action", kPropertyTypeString), // "on" or "off"
-                    Property("time", kPropertyTypeString)
+                    Property("on", kPropertyTypeBoolean),
+                    Property("time_hhmm", kPropertyTypeString, "The 24-hour time string format 'HH:mm' for this schedule.")
                 }),
                 [](const PropertyList& properties) -> ReturnValue {
                     std::string device_name = properties["device_name"].value<std::string>();
+                    bool on = properties["on"].value<bool>();
+                    std::string time_hhmm = properties["time_hhmm"].value<std::string>();
+
+                    // Basic format validation
+                    if (time_hhmm.length() != 5 || time_hhmm[2] != ':') {
+                        throw std::runtime_error("Invalid time_hhmm format. Must be 'HH:mm' (e.g. '14:30').");
+                    }
+
                     std::string device_id = TuyaDeviceManager::GetInstance().FindDeviceId(device_name);
                     if (device_id.empty()) {
                         throw std::runtime_error("Device not found: " + device_name);
                     }
-                    throw std::runtime_error("set_schedule not yet implemented (coming in Phase 3)");
-                    return false;
+
+                    esp_err_t err = TuyaDeviceManager::GetInstance().SetSchedule(device_id, on, time_hhmm);
+                    if (err != ESP_OK) {
+                        throw std::runtime_error("Failed to set Tuya schedule.");
+                    }
+
+                    return std::string("Scheduled ") + device_name + (on ? " ON" : " OFF") + " at " + time_hhmm;
                 });
 
     ESP_LOGI(TAG, "SmartLife MCP tools registered successfully");
